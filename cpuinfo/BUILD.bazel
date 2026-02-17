@@ -1,0 +1,40 @@
+load("@//build/kernel/kleaf:kernel.bzl", "kernel_module","kernel_modules_install")
+load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+filegroup(
+    name = "lkm_sources",
+    srcs = glob(
+        [
+        "**/*.c", 
+        "**/*.h",
+        "Kbuild"],
+        exclude = [
+            "BUILD.bazel*",
+            "**/*.bzl",
+            ".gid/**",
+        ]),
+)
+kernel_module(
+    name = "cpuinfo",
+    srcs = [":lkm_sources"],
+    outs = ["cpuinfo.ko",],
+    kernel_build = "//private/devices/google/akita:kernel",
+ )
+
+copy_to_dist_dir(
+    name = "cpuinfo_dist",
+    data = [":cpuinfo"],
+    dist_dir = "out/cpuinfo",
+    flat = True,
+    log = "info",
+)
+kernel_modules_install(
+    name = "cpuinfo_install",
+    kernel_build = "//private/devices/google/akita:kernel",
+    kernel_modules = [
+        ":cpuinfo",
+    ],
+)

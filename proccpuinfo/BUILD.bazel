@@ -1,0 +1,40 @@
+load("@//build/kernel/kleaf:kernel.bzl", "kernel_module","kernel_modules_install")
+load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+filegroup(
+    name = "lkm_sources",
+    srcs = glob(
+        [
+        "**/*.c", 
+        "**/*.h",
+        "Kbuild"],
+        exclude = [
+            "BUILD.bazel*",
+            "**/*.bzl",
+            ".gid/**",
+        ]),
+)
+kernel_module(
+    name = "proccpuinfo",
+    srcs = [":lkm_sources"],
+    outs = ["proccpuinfo.ko",],
+    kernel_build = "//private/devices/google/akita:kernel",
+ )
+
+copy_to_dist_dir(
+    name = "proccpuinfo_dist",
+    data = [":proccpuinfo"],
+    dist_dir = "out/proccpuinfo",
+    flat = True,
+    log = "info",
+)
+kernel_modules_install(
+    name = "proccpuinfo_install",
+    kernel_build = "//private/devices/google/akita:kernel",
+    kernel_modules = [
+        ":proccpuinfo",
+    ],
+)
