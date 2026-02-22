@@ -3,6 +3,10 @@
 #include "linux/kprobes.h"
 #include "linux/printk.h"
 
+kallsyms_lookup_name_t kallsyms_lookup_name_function = NULL;
+static struct kprobe kallsyms_lookup_name_kp = {
+    .symbol_name = "kallsyms_lookup_name",
+};
 
 unsigned long lookup_name(const char *name){
     if(!kallsyms_lookup_name_function){

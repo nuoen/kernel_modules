@@ -3,8 +3,6 @@
 
 typedef unsigned long (*kallsyms_lookup_name_t)(const char *name);
 
-extern  kallsyms_lookup_name_t kallsyms_lookup_name_function;
-static struct kprobe kallsyms_lookup_name_kp ={.symbol_name="kallsyms_lookup_name"};
 static bool inited=false;
 
 /** 
