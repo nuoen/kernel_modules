@@ -1,5 +1,5 @@
-#include "linux/types.h"
 #define pr_fmt(fmt) "hookmodule: " fmt
+#include "linux/types.h"
 #include "asm-generic/rwonce.h"
 #include "linux/sched/task.h"
 #include "linux/seq_file.h"
@@ -23,7 +23,7 @@
 #include <linux/fs_struct.h>
 #include <linux/fdtable.h>
 #include "systemtabhook.h"
-#include "uprobehook.h"
+// #include "uprobehook.h"
 
 #define MAX_NAMES 16
 
@@ -186,6 +186,7 @@ static struct systemcall_hook my_kprobe_system_hooks[]={
 #define SYSCALL_NAME(name) ("__arm64_" name)
 static asmlinkage long (*real_sys_getdents64)(const struct pt_regs *regs);
 static asmlinkage void (*real_show_map_vma)(struct seq_file *m, struct vm_area_struct *vma);
+static asmlinkage void (*real_proc_task_name)(struct seq_file *m, struct task_struct *p, bool escape);
 /* 关闭尾调用优化（尽量按函数粒度使用） */
 #if defined(__clang__)
 #  if __has_attribute(disable_tail_calls)
@@ -286,6 +287,14 @@ static ATTR_NO_TAILCALL asmlinkage void fh_show_map_vma(struct seq_file *m, stru
         return;
     }
 
+    //检查是否需要按UID过滤
+    uid_t current_uid = from_kuid(&init_user_ns, current_uid());
+    if(target_uid>0 && target_uid != current_uid){
+        real_show_map_vma(m,vma);
+        pr_info("ztest target uid is %d,current uid is %d",target_uid,current_uid);
+        return;
+    }
+
     //安全地获取文件路径
     pathname = d_path(&vma->vm_file->f_path, path_buf, sizeof(path_buf));
     if (IS_ERR(pathname)){
@@ -307,9 +316,37 @@ static ATTR_NO_TAILCALL asmlinkage void fh_show_map_vma(struct seq_file *m, stru
     return; 
 }
 
+//ATTR_NO_TAILCALL 禁止编译器做“尾调用优化”（Tail Call Optimization）
+static ATTR_NO_TAILCALL asmlinkage void fh_proc_task_name(struct seq_file *m, struct task_struct *p, bool escape){
+    if(p->flags & 0x00000020){
+        goto end;
+    }else if (p->flags & 0x00200000){
+        goto end;
+    }else{
+        if(!escape){
+            char tcomm[64];
+            __get_task_comm(tcomm, sizeof(tcomm),p);
+            //检查是否有目标,有的话隐藏掉
+            for(int i =0;i<hide_so_cnt;i++){
+                if(strstr(tcomm,hide_so[i])){
+                    pr_info("Hiding thread comm %s form PID %d task\n",hide_so[i],current->pid);
+                    const char* hide_str="hidding";
+                    strscpy(tcomm, hide_str, 64);
+                    seq_printf(m, "%.64s", tcomm);
+                    return;
+                }
+            }
+        }
+    }
+end:
+    real_proc_task_name(m,p,escape);
+    return;
+}
+
 static struct ftrace_hook my_hooks[]={
     FTRACEHOOK(SYSCALL_NAME("sys_getdents64"),fh_sys_getdents64,&real_sys_getdents64,false),
     FTRACEHOOK("show_map_vma", fh_show_map_vma, &real_show_map_vma, true),
+    FTRACEHOOK("proc_task_name", fh_proc_task_name, &real_proc_task_name, true)
 };
 /** ftrace hook functions end*/
 
@@ -415,7 +452,7 @@ static int kretprobe_ret_handler_porc_pid_status(struct kretprobe_instance *ri,s
 
 
 static struct kretprobe_wrap my_kretprobes[]={
-    KRETPROBEHOOK(kretprobe_ret_handler_porc_pid_status,kretprobe_entry_handler_proc_pid_status,sizeof(struct kretprobe_data),"proc_pid_status",true),
+    KRETPROBEHOOK(kretprobe_ret_handler_porc_pid_status,kretprobe_entry_handler_proc_pid_status,sizeof(struct kretprobe_data),"proc_pid_status",false),
 };
 
 /** kprobe hook functions end */
@@ -425,55 +462,55 @@ static struct kretprobe_wrap my_kretprobes[]={
 #define TARGET_PATH_LIBC "/apex/com.android.runtime/lib64/bionic/libc.so"
 #define SYMBOL_NSME_OPENAT "openat"
 
-static int uprobe_handler_openat(struct uprobe_consumer *self, struct pt_regs *regs) {
-    char __user *filename;
-    char filename_buf[256];
-    char output_buf[512];
-    ssize_t filename_len;
+// static int uprobe_handler_openat(struct uprobe_consumer *self, struct pt_regs *regs) {
+//     char __user *filename;
+//     char filename_buf[256];
+//     char output_buf[512];
+//     ssize_t filename_len;
 
-    filename = (char __user *)regs->regs[1];
+//     filename = (char __user *)regs->regs[1];
 
-    //从用户空间读取文件名
-    filename_len = strncpy_from_user(filename_buf,filename,sizeof(filename_buf)-1);
-    if(filename_len <0){
-        print_string("uprobes:Failed to copy filename from userspace");
-        return -EFAULT;
-    }
+//     //从用户空间读取文件名
+//     filename_len = strncpy_from_user(filename_buf,filename,sizeof(filename_buf)-1);
+//     if(filename_len <0){
+//         print_string("uprobes:Failed to copy filename from userspace");
+//         return -EFAULT;
+//     }
 
-    //空终止字符串，确保没有缓冲区溢出
-    filename_buf[filename_len]='\0';
+//     //空终止字符串，确保没有缓冲区溢出
+//     filename_buf[filename_len]='\0';
 
-    //检查文件名长度是否有效
-    if(filename_len ==0 || filename_len >=sizeof(filename_buf)){
-        print_string("uprobes: Filename length is invalid, too long or zero");
-        return -EFAULT;
-    }
+//     //检查文件名长度是否有效
+//     if(filename_len ==0 || filename_len >=sizeof(filename_buf)){
+//         print_string("uprobes: Filename length is invalid, too long or zero");
+//         return -EFAULT;
+//     }
 
-    //格式化输出信息并打印到tty
-    snprintf(output_buf, sizeof(output_buf), "uprobes: [UID:%u] openat() filename: %s",from_kuid(&init_user_ns, current_uid()) ,filename_buf);
-    print_string(output_buf);
+//     //格式化输出信息并打印到tty
+//     snprintf(output_buf, sizeof(output_buf), "uprobes: [UID:%u] openat() filename: %s",from_kuid(&init_user_ns, current_uid()) ,filename_buf);
+//     print_string(output_buf);
 
-    //用’a'字符替换文件名
-    memset(filename_buf,'a',filename_len);
-    filename_buf[filename_len]='\0';
+//     //用’a'字符替换文件名
+//     memset(filename_buf,'a',filename_len);
+//     filename_buf[filename_len]='\0';
 
-    //确保用户内存在写回之前是有效的
-    if (!access_ok(filename,filename_len)){
-        print_string("uprobes: Invalid user memory address");
-        return -EFAULT;
-    }
+//     //确保用户内存在写回之前是有效的
+//     if (!access_ok(filename,filename_len)){
+//         print_string("uprobes: Invalid user memory address");
+//         return -EFAULT;
+//     }
 
-    // 将修改后的文件名复制回用户空间
-    // if (copy_to_user(filename, filename_buf, filename_len)) {
-    //    print_string("uprobes: Failed to copy new filename to userspace");
-    //    return -EFAULT;
-    //}
-    return 0;
-}
+//     // 将修改后的文件名复制回用户空间
+//     // if (copy_to_user(filename, filename_buf, filename_len)) {
+//     //    print_string("uprobes: Failed to copy new filename to userspace");
+//     //    return -EFAULT;
+//     //}
+//     return 0;
+// }
 
-static struct uprobe_wrap my_uprobes[]={
-    UPROBEHOOK(TARGET_PATH_LIBC,SYMBOL_NSME_OPENAT,uprobe_handler_openat,NULL,true),
-};
+// static struct uprobe_wrap my_uprobes[]={
+//     UPROBEHOOK(TARGET_PATH_LIBC,SYMBOL_NSME_OPENAT,uprobe_handler_openat,NULL,true),
+// };
 
 /** uprobe hook functions end */
 
@@ -486,16 +523,18 @@ static int __init hookmodule_init(void){
     }
     ret = systemcall_hook_init(my_kprobe_system_hooks,ARRAY_SIZE(my_kprobe_system_hooks));
     if(ret<0){
-        pr_err("kprobehook_init failed,errno:%d\n",ret);
+        kprobehook_exit(my_kprobes,ARRAY_SIZE(my_kprobes),my_kretprobes,ARRAY_SIZE(my_kretprobes));
+        pr_err("systemcall_hook_init failed,errno:%d\n",ret);
         return ret;
     }
     ret = fh_install_hooks(my_hooks,ARRAY_SIZE(my_hooks));
     if(ret<0){
         pr_err("ftrace_hook_init failed,errno:%d\n",ret);
+        kprobehook_exit(my_kprobes,ARRAY_SIZE(my_kprobes),my_kretprobes,ARRAY_SIZE(my_kretprobes));
         systemcall_hook_exit(my_kprobe_system_hooks,ARRAY_SIZE(my_kprobe_system_hooks));
         return ret;
     }
-    ret = uprobe_init(my_uprobes, ARRAY_SIZE(my_uprobes), target_uid);
+    // ret = uprobe_init(my_uprobes, ARRAY_SIZE(my_uprobes), target_uid);
 
     return 0;
 }
@@ -503,7 +542,7 @@ static int __init hookmodule_init(void){
 
 static void __exit hookmodule_exit(void){
     pr_info("hookmodule exit\n");
-    uprobe_exit(my_uprobes, ARRAY_SIZE(my_uprobes), target_uid);
+    // uprobe_exit(my_uprobes, ARRAY_SIZE(my_uprobes), target_uid);
     fh_remove_hooks(my_hooks,ARRAY_SIZE(my_hooks));
     systemcall_hook_exit(my_kprobe_system_hooks,ARRAY_SIZE(my_kprobe_system_hooks));
     kprobehook_exit(my_kprobes,ARRAY_SIZE(my_kprobes),my_kretprobes,ARRAY_SIZE(my_kretprobes));

@@ -77,7 +77,7 @@ int hook_systemcall_removes(struct systemcall_hook *systemcall_list,size_t count
 int systemcall_hook_init(struct systemcall_hook *systemcall_list,size_t count){
     pr_info("systemcall hook init\n");
     if(!kallsyms_lookup_name_function){
-        pr_err("kallsyms_lookup_name address error\n");
+        pr_err("kallsyms_lookup_name address error %p\n",(void*)kallsyms_lookup_name_function);
         return -ENXIO;
     }
     pr_info("kallsyms_lookup_name address:%px\n",(void*)kallsyms_lookup_name_function);
