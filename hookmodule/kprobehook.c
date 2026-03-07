@@ -79,8 +79,8 @@ void kprobehook_exit(struct kprobe_wrap* kprobe_list,size_t kprobe_cnt,
         if(kprobe_list[index].valid){
             unregister_kprobe(&kprobe_list[index].kp);
         }
-        int kretp_index =0;
-        for(int i=0;i<kretp_index;i++){
+
+        for(int i=0;i<kretporbe_cnt;i++){
         if(kretprobe_list[i].valid){
             unregister_kretprobe(&kretprobe_list[i].kretp);
         }
