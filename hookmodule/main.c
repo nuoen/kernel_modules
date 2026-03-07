@@ -45,7 +45,7 @@ module_param(debug, bool, 0644);
 MODULE_PARM_DESC(debug, "is debug");
 
 /**
-insmod hookmodule.ko hide_so="frida,gum,gmain,AGENT" debug=true
+insmod ./hookmodule.ko hide_so="frida,gum,gmain,AGENT" debug=true
 */
 
 /** system tab call hook functions start */
@@ -419,11 +419,10 @@ static int kretprobe_entry_handler_proc_pid_status(struct kretprobe_instance *ri
     task_lock(task);
     data->task = task;
     data->original_ptrace = task->ptrace; //保存原始TracerPid
-    get_task_comm(data->original_comm, task);
+    strscpy(data->original_comm, task->comm, TASK_COMM_LEN);
     if(debug){
         pr_info("proc_pid_status task comm is %s",task->comm);
     }
-    // memcpy(data->original_comm, task->comm, sizeof(task->comm));
     data->original_state = READ_ONCE(task->__state); //保存原始任务状态
     if(data->original_state == TASK_TRACED){
         WRITE_ONCE(task->__state, TASK_RUNNING); //安全地修改任务状态
@@ -431,7 +430,7 @@ static int kretprobe_entry_handler_proc_pid_status(struct kretprobe_instance *ri
     }
     for(int i =0;i<hide_so_cnt;i++){
         if(strstr(data->original_comm,hide_so[i])){
-            memcpy(task->comm, REPLAE_COMM, TASK_COMM_LEN);
+            strscpy(task->comm, REPLAE_COMM, TASK_COMM_LEN);
             pr_info("Hiding state comm library %s form PID %d maps\n",hide_so[i],task->pid);
         }
     }
@@ -461,9 +460,9 @@ static int kretprobe_ret_handler_porc_pid_status(struct kretprobe_instance *ri,s
             ,seq,task->pid);
     }
     char comm_name[TASK_COMM_LEN];
-    get_task_comm(comm_name, task);
+    strscpy(comm_name,task->comm,TASK_COMM_LEN);
     if (strcmp(comm_name, REPLAE_COMM) == 0) {
-        memcpy(task->comm, data->original_comm, TASK_COMM_LEN);
+        strscpy(task->comm, data->original_comm, TASK_COMM_LEN);
     }
     task_unlock(task);
     pr_info("[SEQ:%d] Restored TracerPid for process %d to %d\n", seq, task->pid, data->original_ptrace);
