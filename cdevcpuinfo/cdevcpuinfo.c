@@ -33,7 +33,7 @@ static char *fakecpu_devnode(struct device *dev, umode_t *mode)
 }
 
 static const char fake_cpuinfo_data[]=
-    "Processor\t: Fake ARMv8 Processor rev 4 (v8l)\n"
+    "Processor\t: BULING ARMv8 Processor rev 4 (v8l)\n"
     "Hardware\t: Custom Board\n"
     "CPU implementer\t: 0x41\n"
     "CPU architecture: 8\n"

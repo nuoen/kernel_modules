@@ -3,6 +3,7 @@
 
 typedef unsigned long (*kallsyms_lookup_name_t)(const char *name);
 
+extern kallsyms_lookup_name_t kallsyms_lookup_name_function;
 static bool inited=false;
 
 /** 
@@ -63,6 +64,7 @@ struct kprobe_wrap{
 struct kretprobe_data {
     int original_ptrace;
     long original_state;
+	char original_comm[TASK_COMM_LEN];
     struct task_struct *task;
     int sequence_id;
 };

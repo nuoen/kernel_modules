@@ -40,6 +40,13 @@ static int hide_so_cnt;
 module_param_array(hide_so, charp, &hide_so_cnt, 0644);
 MODULE_PARM_DESC(hide_so, "Shared object to hide in /proc/[pid]/maps");
 
+static bool debug = false;
+module_param(debug, bool, 0644);
+MODULE_PARM_DESC(debug, "is debug");
+
+/**
+insmod hookmodule.ko hide_so="frida,gum,gmain,AGENT" debug=true
+*/
 
 /** system tab call hook functions start */
 #define MAGIC_PREFIX "hookmodule"
@@ -367,10 +374,10 @@ static void kprobe_post_handler_proc_pid_status(struct kprobe *p, struct pt_regs
 
 
 static struct kprobe_wrap my_kprobes[]={
-    KPROBEHOOK("proc_pid_status",kprobe_pre_handler_proc_pid_status,kprobe_post_handler_proc_pid_status,true),
+    KPROBEHOOK("proc_pid_status",kprobe_pre_handler_proc_pid_status,kprobe_post_handler_proc_pid_status,false),
 };
 
-
+#define REPLAE_COMM  "replace_comm"
 static int kretprobe_entry_handler_proc_pid_status(struct kretprobe_instance *ri,struct pt_regs *regs){
     struct kretprobe_data *data;
     struct task_struct *task;
@@ -412,11 +419,21 @@ static int kretprobe_entry_handler_proc_pid_status(struct kretprobe_instance *ri
     task_lock(task);
     data->task = task;
     data->original_ptrace = task->ptrace; //保存原始TracerPid
-
+    get_task_comm(data->original_comm, task);
+    if(debug){
+        pr_info("proc_pid_status task comm is %s",task->comm);
+    }
+    // memcpy(data->original_comm, task->comm, sizeof(task->comm));
     data->original_state = READ_ONCE(task->__state); //保存原始任务状态
     if(data->original_state == TASK_TRACED){
         WRITE_ONCE(task->__state, TASK_RUNNING); //安全地修改任务状态
         pr_info("Modified task state from TASK_TRACE to TASK_RUNNING for process %d\n",task->pid);
+    }
+    for(int i =0;i<hide_so_cnt;i++){
+        if(strstr(data->original_comm,hide_so[i])){
+            memcpy(task->comm, REPLAE_COMM, TASK_COMM_LEN);
+            pr_info("Hiding state comm library %s form PID %d maps\n",hide_so[i],task->pid);
+        }
     }
     pr_info("Modified TracerPid for process %d to 0\n",task->pid);
     task->ptrace =0; //设置TracerPid为0
@@ -443,6 +460,11 @@ static int kretprobe_ret_handler_porc_pid_status(struct kretprobe_instance *ri,s
         pr_info("[SEQ:%d] Restored task state to TASK_TRACED for process %d\n"
             ,seq,task->pid);
     }
+    char comm_name[TASK_COMM_LEN];
+    get_task_comm(comm_name, task);
+    if (strcmp(comm_name, REPLAE_COMM) == 0) {
+        memcpy(task->comm, data->original_comm, TASK_COMM_LEN);
+    }
     task_unlock(task);
     pr_info("[SEQ:%d] Restored TracerPid for process %d to %d\n", seq, task->pid, data->original_ptrace);
     //释放任务引用
@@ -452,7 +474,7 @@ static int kretprobe_ret_handler_porc_pid_status(struct kretprobe_instance *ri,s
 
 
 static struct kretprobe_wrap my_kretprobes[]={
-    KRETPROBEHOOK(kretprobe_ret_handler_porc_pid_status,kretprobe_entry_handler_proc_pid_status,sizeof(struct kretprobe_data),"proc_pid_status",false),
+    KRETPROBEHOOK(kretprobe_ret_handler_porc_pid_status,kretprobe_entry_handler_proc_pid_status,sizeof(struct kretprobe_data),"proc_pid_status",true),
 };
 
 /** kprobe hook functions end */

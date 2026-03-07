@@ -32,24 +32,41 @@ int kprobehook_init(struct kprobe_wrap* kprobe_list,size_t kprobe_cnt,
         return -ENXIO;
     }
     pr_info("kallsyms_lookup_name address:%px\n",(void*)kallsyms_lookup_name_function);
-    int index=0;
-    for(;index<kprobe_cnt;index++){
-        if(kprobe_list[index].valid){
-            ret =register_kprobe(&kprobe_list[index].kp);
+    int kp_index=0;
+    for(;kp_index<kprobe_cnt;kp_index++){
+        if(kprobe_list[kp_index].valid){
+            ret =register_kprobe(&kprobe_list[kp_index].kp);
             if(ret<0){
                 goto error;
             }
-            pr_info("Planted kprobe at %s:%p\n",kprobe_list[index].kp.symbol_name,kprobe_list[index].kp.addr);
+            pr_info("Planted kprobe at %s:%p\n",kprobe_list[kp_index].kp.symbol_name,kprobe_list[kp_index].kp.addr);
         }
     }
+    int kretp_index=0;
+    for(;kretp_index<kretporbe_cnt;kretp_index++){
+        if(kretprobe_list[kretp_index].valid){
+            ret = register_kretprobe(&kretprobe_list[kretp_index].kretp);
+                        if(ret<0){
+                goto error;
+            }
+            pr_info("Planted kretprobe at %s:%p\n",kretprobe_list[kretp_index].kretp.kp.symbol_name,kretprobe_list[kretp_index].kretp.kp.addr);
+        }
+    }
+
     return 0;
 error:
     pr_err("register kprobe failed,errno:%d\n",ret);
-    for(int i=0;i<index;i++){
+    for(int i=0;i<kp_index;i++){
         if(kprobe_list[i].valid){
             unregister_kprobe(&kprobe_list[i].kp);
         }
     }
+    for(int i=0;i<kretp_index;i++){
+        if(kretprobe_list[i].valid){
+            unregister_kretprobe(&kretprobe_list[i].kretp);
+        }
+    }
+
     return ret;
 };
 

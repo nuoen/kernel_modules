@@ -1,3 +1,4 @@
+#define pr_fmt(fmt) "proccpuinfo: " fmt
 #include "linux/init.h"
 #include "linux/proc_fs.h"
 #include "linux/seq_file.h"
@@ -10,9 +11,11 @@ MODULE_VERSION("0.1");
 
 #define PROC_NAME "proccpuinfo"
 
+static struct proc_dir_entry *proc_file;
+
 static int fake_cpuinfo_show(struct seq_file *m,void *v){
         seq_printf(m,
-        "Processor\t: Fake ARMv8 Processor rev 4 (v8l)\n"
+        "Processor\t: XY ARMv8 Processor rev 4 (v8l)\n"
         "Hardware\t: Custom Board\n"
         "CPU implementer\t: 0x41\n"
         "CPU architecture: 8\n"
@@ -31,15 +34,25 @@ static const struct proc_ops fake_cpuinfo_fops = {
     .proc_read = seq_read,
     .proc_lseek = seq_lseek,
     .proc_release = single_release,
-}
+};
 
 
 static int __init fake_cpuinfo_init(void){
-    proc_create(PROC_NAME, 0, NULL, &fake_cpuinfo_fops);
-    pr_info()
+    proc_file = proc_create(PROC_NAME, 0, NULL, &fake_cpuinfo_fops);
+    if(proc_file == NULL){
+        pr_alert("err: not init /proc/%s",PROC_NAME);
+        return -ENOMEM;
+    }
+    pr_info("/proc/%s init \n",PROC_NAME);
+    return 0;
+}
+
+static void __exit fake_cpuinfo_exit(void){
+    proc_remove(proc_file);
+    pr_info("/proc/%s remove \n",PROC_NAME);
 }
 
 
 
-module_init();
-module_exit()
+module_init(fake_cpuinfo_init);
+module_exit(fake_cpuinfo_exit);
