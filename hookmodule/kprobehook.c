@@ -1,3 +1,4 @@
+#define pr_fmt(fmt) "hookmodule: " fmt
 #include "asm-generic/errno-base.h"
 #include "kprobehook.h"
 #include "linux/kprobes.h"

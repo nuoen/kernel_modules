@@ -1,3 +1,4 @@
+#define pr_fmt(fmt) "hookmodule: " fmt
 #include "ftracehook.h"
 #include "linux/container_of.h"
 #include "linux/export.h"

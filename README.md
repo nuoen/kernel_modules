@@ -70,8 +70,11 @@ tools/bazel run \
   --config=use_source_tree_aosp \
   --config=no_download_gki_fips140 \
   //modules/hookmodule:hookmodule_dist \
+<<<<<<< HEAD
   --gki_build_config_fragment=//private/devices/google/akita:akita_gki.fragment \
   --defconfig_fragment=//private/devices/google/akita:akita_gki.fragment \
+=======
+>>>>>>> e0a9a9f (add hook module README)
   --sandbox_debug
 ```
 

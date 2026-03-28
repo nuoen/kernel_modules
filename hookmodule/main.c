@@ -460,7 +460,7 @@ static int kretprobe_ret_handler_porc_pid_status(struct kretprobe_instance *ri,s
             ,seq,task->pid);
     }
     char comm_name[TASK_COMM_LEN];
-    strscpy(comm_name,task->comm,TASK_COMM_LEN);
+    strscpy(comm_name, task->comm, TASK_COMM_LEN);
     if (strcmp(comm_name, REPLAE_COMM) == 0) {
         strscpy(task->comm, data->original_comm, TASK_COMM_LEN);
     }
